@@ -1,71 +1,101 @@
-/* 基本リセット */
 * {
   box-sizing: border-box;
   margin: 0;
   padding: 0;
 }
 
-html, body {
-  height: 100%;
-  font-family: 'Segoe UI', sans-serif;
-  background: #111;
-  color: #fff;
+:root {
+  --accent-color: #00ffcc; /* メインのアクセントカラー */
+  --accent-glow: rgba(0, 255, 204, 0.3);
+  --bg-dark: #111;
+  --surface-dark: #1c1c1c;
+  --border-color: #333;
+  --text-main: #fff;
+  --text-dim: #aaa;
 }
 
-/* ヘッダー */
+html, body {
+  height: 100%;
+  font-family: 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
+  background: var(--bg-dark);
+  color: var(--text-main);
+  line-height: 1.6;
+  overflow-x: hidden;
+}
+
+/* ヘッダー [1] */
 header {
-  padding: 15px;
-  background: #181818;
-  border-bottom: 1px solid #222;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  padding: 15px 20px;
+  background: rgba(24, 24, 24, 0.85);
+  backdrop-filter: blur(10px); /* グラスモーフィズム効果 */
+  border-bottom: 1px solid var(--border-color);
   display: flex;
   align-items: center;
   justify-content: space-between;
   flex-wrap: wrap;
+  gap: 10px;
 }
 
 h1 {
   font-size: 1.5rem;
+  letter-spacing: 1px;
+  background: linear-gradient(90deg, #fff, var(--accent-color));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
 }
 
-/* 入力・ボタン */
+/* 入力・ボタン [1][2] */
 input[type="text"] {
-  padding: 6px 10px;
-  border: 1px solid #333;
-  border-radius: 6px;
+  padding: 8px 12px;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
   background: #222;
-  color: #fff;
+  color: var(--text-main);
   outline: none;
   transition: all 0.3s ease;
 }
 
 input[type="text"]:focus {
-  border-color: #00ffcc;
+  border-color: var(--accent-color);
   background: #1a1a1a;
+  box-shadow: 0 0 8px var(--accent-glow);
 }
 
-/* ボタン */
+/* ボタン [2][3] */
 button {
-  padding: 8px 14px;
+  padding: 10px 18px;
   border: none;
-  border-radius: 6px;
-  background: #222;
-  color: #fff;
+  border-radius: 8px;
+  background: #2a2a2a;
+  color: var(--text-main);
   cursor: pointer;
-  font-weight: 500;
+  font-weight: 600;
   position: relative;
   overflow: hidden;
-  transition: transform 0.2s ease, background 0.3s ease;
+  transition: transform 0.2s ease, background 0.3s ease, box-shadow 0.3s ease;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
 button:hover {
-  transform: scale(1.05);
+  transform: translateY(-2px);
+  background: #333;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+button:active {
+  transform: translateY(0);
 }
 
 button::after {
   content: '';
   position: absolute;
   inset: 0;
-  background: linear-gradient(120deg, rgba(255,255,255,0.15), rgba(0,255,204,0.15));
+  background: linear-gradient(120deg, rgba(255,255,255,0.1), rgba(0,255,204,0.1));
   opacity: 0;
   transition: opacity 0.3s;
 }
@@ -74,27 +104,44 @@ button:hover::after {
   opacity: 1;
 }
 
-/* メインリスト */
+/* 特別なボタン（新規作成など） */
+#newThreadBtn {
+  background: var(--accent-color);
+  color: #000;
+}
+#newThreadBtn:hover {
+  background: #00e6b8;
+}
+
+/* メインリスト [3] */
 main {
   flex: 1;
   overflow-y: auto;
-  padding: 15px;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
 }
 
-/* スレッドカード幅調整 */
+/* スレッドカード [3][4][5] */
 .threadCard {
-  background: #1c1c1c;
-  border: 1px solid #333;
-  padding: 12px 14px;
-  margin: 0 auto 10px auto;  /* 上下のマージンはそのまま、左右は中央揃え */
-  border-radius: 8px;
+  background: var(--surface-dark);
+  border: 1px solid var(--border-color);
+  padding: 16px 20px;
+  margin-bottom: 12px;
+  border-radius: 12px;
   cursor: pointer;
   position: relative;
   overflow: hidden;
-  transition: transform 0.3s ease, background 0.3s ease;
-  max-width: 1000px;  /* 最大幅を縮める */
-  width: 95%;        /* 画面幅に応じて自動調整 */
-  display: block;
+  transition: transform 0.3s cubic-bezier(0.25, 0.8, 0.25, 1), background 0.3s ease, border-color 0.3s ease;
+  max-width: 800px;
+  width: 100%;
+}
+
+.threadCard:hover {
+  background: #252525;
+  transform: scale(1.01);
+  border-color: #444;
 }
 
 .threadCard::before {
@@ -103,103 +150,130 @@ main {
   top: 0; left: -100%;
   width: 100%;
   height: 100%;
-  background: linear-gradient(120deg, rgba(0,255,204,0.2), transparent);
+  background: linear-gradient(120deg, rgba(0,255,204,0.1), transparent);
   transform: skewX(-20deg);
-  transition: all 0.5s;
-}
-
-.threadCard:hover {
-  background: #2a2a2a;
-  transform: scale(1.02);
+  transition: all 0.6s ease;
 }
 
 .threadCard:hover::before {
   left: 100%;
 }
-/* スレッドカード内タイトルと情報の左右レイアウト */
+
 .threadCardContent {
   display: flex !important;
   justify-content: space-between !important;
   align-items: center !important;
+  gap: 15px;
 }
 
-/* 左側：タイトル */
 .threadCardContent .title {
-  color: #fff !important;
+  font-size: 1.1rem;
+  color: var(--text-main) !important;
   font-weight: 600 !important;
   overflow: hidden !important;
   text-overflow: ellipsis !important;
   white-space: nowrap !important;
 }
 
-/* 右側：日付と返信件数 */
 .threadCard .threadInfo {
-  color: #aaa !important; /* 薄い灰色 */
-  font-size: 12px !important;
+  color: var(--text-dim) !important;
+  font-size: 13px !important;
   white-space: nowrap !important;
   text-align: right !important;
   flex-shrink: 0 !important;
 }
 
-/* モーダル */
+/* モーダル [5][6] */
 .modal {
   display: none;
   position: fixed;
   inset: 0;
-  background: rgba(0,0,0,0.65);
+  background: rgba(0, 0, 0, 0.8);
+  backdrop-filter: blur(4px);
   justify-content: center;
   align-items: center;
-  animation: fadeIn 0.3s ease forwards;
+  z-index: 1000;
 }
 
 .modal.active {
   display: flex;
+  animation: fadeIn 0.3s ease forwards;
 }
 
-/* モーダルのコンテンツ */
 .modalContent {
-  background: #1c1c1c;
-  padding: 20px;
-  border-radius: 10px;
-  width: 90%;
-  max-width: 400px;
-  max-height: 80vh;  /* 画面の80%まで */
-  overflow-y: auto;  /* 内容がはみ出たらスクロール */
-  border: 1px solid #333;
-  position: relative;
-}
-
-/* メッセージリスト */
-#messageList {
-  max-height: 60vh;  /* モーダル内でもリストの高さを制限 */
+  background: var(--surface-dark);
+  padding: 24px;
+  border-radius: 16px;
+  width: 95%;
+  max-width: 500px;
+  max-height: 85vh;
   overflow-y: auto;
+  border: 1px solid var(--border-color);
+  position: relative;
+  box-shadow: 0 20px 40px rgba(0,0,0,0.4);
 }
 
-/* モーション */
-@keyframes fadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
+#modalTitle {
+  margin-bottom: 20px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--border-color);
 }
 
-@keyframes slideIn {
-  from { transform: translateY(-20px); opacity: 0; }
-  to { transform: translateY(0); opacity: 1; }
+/* メッセージリスト [6][7] */
+#messageList {
+  margin-top: 15px;
 }
 
-/* メッセージアイテム */
 .messageItem {
-  padding: 6px 0;
+  padding: 15px 0;
   border-bottom: 1px solid #222;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
-/* 波形用キャンバスの高さは固定、再生前は透明にして存在感をなくす */
+
+.messageItem:last-child {
+  border-bottom: none;
+}
+
+.messageHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 12px;
+  color: var(--text-dim);
+}
+
+/* シークバーのカスタマイズ */
+input[type="range"] {
+  -webkit-appearance: none;
+  width: 100%;
+  height: 4px;
+  background: #333;
+  border-radius: 2px;
+  outline: none;
+}
+
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 12px;
+  height: 12px;
+  background: var(--accent-color);
+  border-radius: 50%;
+  cursor: pointer;
+  box-shadow: 0 0 5px var(--accent-color);
+}
+
+/* 波形キャンバス [7] */
 .messageItem canvas {
   display: block;
-  width: 300px;
+  width: 100%;
   height: 60px;
-  background: transparent; /* 波形非表示時は透明 */
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 4px;
 }
 
-/* 録音ボックス */
+/* 録音ボックス [7][8] */
 #recordBox {
   display: none;
   position: fixed;
@@ -208,28 +282,62 @@ main {
   transform: translate(-50%, -50%);
   text-align: center;
   background: #111;
-  padding: 12px;
-  border-radius: 10px;
-  border: 1px solid #333;
-  color: #fff;
-  animation: pulse 1.2s infinite alternate;
+  padding: 25px;
+  border-radius: 20px;
+  border: 1px solid var(--accent-color);
+  color: var(--text-main);
+  z-index: 2000;
+  box-shadow: 0 0 30px rgba(0, 255, 204, 0.2);
+  animation: pulse 1.5s infinite alternate;
 }
 
 #waveCanvas {
   display: block;
-  margin: 10px auto;
+  margin: 15px auto;
   background: #000;
-  border-radius: 6px;
+  border-radius: 8px;
+  width: 100%;
+  max-width: 250px;
 }
 
-/* 録音中アニメーション */
-@keyframes pulse {
-  from { box-shadow: 0 0 0 0 rgba(0,255,204,0.3); }
-  to { box-shadow: 0 0 20px 10px rgba(0,255,204,0.15); }
+/* アニメーション [6][8] */
+@keyframes fadeIn {
+  from { opacity: 0; transform: scale(0.95); }
+  to { opacity: 1; transform: scale(1); }
 }
+
+@keyframes pulse {
+  from { box-shadow: 0 0 10px rgba(0,255,204,0.2); border-color: rgba(0,255,204,0.5); }
+  to { box-shadow: 0 0 30px rgba(0,255,204,0.4); border-color: rgba(0,255,204,1); }
+}
+
+/* 使用容量表示 [9] */
+#capacityDisplay {
+  font-size: 12px;
+  color: var(--text-dim);
+  margin-left: auto;
+  padding-right: 10px;
+}
+
+/* モバイル対応 [8] */
 @media (max-width: 600px) {
   header {
-    align-items: flex-start;
-    gap: 12px; /* 上下間隔を追加 */
+      flex-direction: column;
+      align-items: stretch;
+      padding: 10px;
+  }
+  
+  .threadCardContent {
+      flex-direction: column;
+      align-items: flex-start !important;
+      gap: 5px;
+  }
+  
+  .threadCard .threadInfo {
+      text-align: left !important;
+  }
+
+  button {
+      width: 100%;
   }
 }
