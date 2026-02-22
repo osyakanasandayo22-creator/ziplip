@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <title>ZIPLIP</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+  <header>
+    <h1>ZIPLIP</h1>
+    <div id="capacityDisplay">使用容量：0 MB</div>
+    <input type="text" id="threadSearchInput" placeholder="スレッドを検索…" />
+    <button id="newThreadBtn">＋ 新規スレッド</button>
+  </header>
+
+  <main>
+    <div id="threadList"></div>
+  </main>
+
+  <div id="modal" class="modal">
+    <div class="modalContent">
+      <h2 id="modalTitle">スレッド</h2>
+
+      <div class="recordArea">
+        <button id="recordBtn">参加</button>
+        <button id="playAllBtn">▶ 会話記録を再生</button>
+      </div>
+
+      <div id="messageList"></div>
+
+      <button id="closeModalBtn">閉じる</button>
+      <button id="deleteThreadBtn">スレッドを削除</button>
+    </div>
+  </div>
+  <div id="createThreadModal" class="modal">
+    <div class="modalContent">
+      <h3>スレッドを立てる</h3>
+  
+      <button id="startThreadRecordBtn">一言どうぞ</button>
+  
+      <div id="titleInputArea" style="display:none;">
+        <p>スレッド名</p>
+        <input type="text" id="threadTitleInput" maxlength="10">
+        <button id="saveThreadBtn">作成</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="script.js"></script>
+  <!-- ▼▼ 追加：録音UI ▼▼ -->
+<div id="recordBox" style="display:none; text-align:center; margin-top:20px;">
+    <p>録音中… 残り <span id="countdown">5</span> 秒</p>
+    <canvas id="waveCanvas" width="300" height="60"></canvas>
+  </div>
+  <!-- ▲▲ 追加ここまで ▲▲ -->
+</body>
+</html>
