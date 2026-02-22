@@ -29,7 +29,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   request.onsuccess = e => {
       db = e.target.result;
-      renderThreadsByReplyCount(); 
+      renderThreadsByReplyCount();
       updateCapacity();
   };
 
@@ -67,6 +67,7 @@ document.addEventListener("DOMContentLoaded", () => {
       const tx = db.transaction(["messages", "threads"], "readwrite");
       const msgStore = tx.objectStore("messages");
       msgStore.delete(messageId);
+
       tx.oncomplete = () => {
           recalculateThreadUpdatedAt(currentThreadId);
       };
@@ -108,6 +109,7 @@ document.addEventListener("DOMContentLoaded", () => {
       };
   }
 
+  // 修正：renderThreadsでも正しいCSSクラスを持つDOM構造を作成するように変更
   function renderThreads() {
       const list = document.getElementById("threadList");
       list.innerHTML = "";
@@ -118,12 +120,29 @@ document.addEventListener("DOMContentLoaded", () => {
       index.openCursor(null, "prev").onsuccess = e => {
           const cursor = e.target.result;
           if (!cursor) return;
+
           const thread = cursor.value;
           const card = document.createElement("div");
           card.className = "threadCard";
+
           countMessages(thread.id, count => {
-              card.textContent = `${thread.title} (${new Date(thread.lastUpdatedAt).toLocaleString()}) - レス ${count} 件`;
+              // ここでtextContentを使わず、CSSが効くように構造を作成
+              const contentDiv = document.createElement("div");
+              contentDiv.className = "threadCardContent";
+
+              const titleDiv = document.createElement("div");
+              titleDiv.className = "title";
+              titleDiv.textContent = thread.title;
+
+              const infoDiv = document.createElement("div");
+              infoDiv.className = "threadInfo";
+              infoDiv.textContent = `${new Date(thread.lastUpdatedAt).toLocaleString()} - レス ${count} 件`;
+
+              contentDiv.appendChild(titleDiv);
+              contentDiv.appendChild(infoDiv);
+              card.appendChild(contentDiv);
           });
+
           card.onclick = () => openThread(thread.id);
           list.appendChild(card);
           cursor.continue();
@@ -152,11 +171,13 @@ document.addEventListener("DOMContentLoaded", () => {
               if (remaining === 0) drawThreads();
               return;
           }
+
           const thread = cursor.value;
           if (filterText && !thread.title.includes(filterText)) {
               cursor.continue();
               return;
           }
+
           remaining++;
           countMessages(thread.id, count => {
               threadsWithCount.push({ thread, count });
@@ -173,12 +194,15 @@ document.addEventListener("DOMContentLoaded", () => {
               card.className = "threadCard";
               const contentDiv = document.createElement("div");
               contentDiv.className = "threadCardContent";
+
               const titleDiv = document.createElement("div");
               titleDiv.className = "title";
               titleDiv.textContent = thread.title;
+
               const infoDiv = document.createElement("div");
               infoDiv.className = "threadInfo";
               infoDiv.textContent = `${new Date(thread.lastUpdatedAt).toLocaleString()} - レス ${count} 件`;
+
               contentDiv.appendChild(titleDiv);
               contentDiv.appendChild(infoDiv);
               card.appendChild(contentDiv);
@@ -255,19 +279,17 @@ document.addEventListener("DOMContentLoaded", () => {
 
       let mimeType = "audio/webm";
       if (/iPhone|iPad|iPod/i.test(navigator.userAgent)) {
-          mimeType = "audio/mp4"; 
+          mimeType = "audio/mp4";
       }
       mediaRecorder = new MediaRecorder(recordingStream, { mimeType });
       audioChunks = [];
       mediaRecorder.ondataavailable = e => audioChunks.push(e.data);
       mediaRecorder.onstop = () => {
-          // iOS対応修正: 変数 mimeType を使用してBlobを作成
           threadAudioBlob = new Blob(audioChunks, { type: mimeType });
           document.getElementById("recordBox").style.display = "none";
           titleInputArea.style.display = "block";
           threadTitleInput.focus();
       };
-
       mediaRecorder.start();
       document.getElementById("recordBox").style.display = "block";
       let timeLeft = 5;
@@ -334,7 +356,6 @@ document.addEventListener("DOMContentLoaded", () => {
           audioChunks = [];
           mediaRecorder.ondataavailable = e => audioChunks.push(e.data);
           mediaRecorder.onstop = () => {
-              // iOS対応修正: 変数 mimeType を使用してBlobを作成
               const blob = new Blob(audioChunks, { type: mimeType });
               cancelAnimationFrame(animationId);
               audioContext.close();
@@ -342,7 +363,6 @@ document.addEventListener("DOMContentLoaded", () => {
               document.getElementById("recordBox").style.display = "none";
               saveReplyBlob(blob);
           };
-
           mediaRecorder.start();
           document.getElementById("recordBox").style.display = "block";
           let timeLeft = 5;
@@ -401,19 +421,24 @@ document.addEventListener("DOMContentLoaded", () => {
                   const div = document.createElement("div");
                   div.className = "messageItem";
                   div.dataset.msgId = msg.id;
+
                   const orderLabel = document.createElement("div");
                   orderLabel.className = "orderLabel";
                   orderLabel.textContent = `${index + 1}`;
+
                   const timeLabel = document.createElement("div");
                   timeLabel.className = "timeLabel";
                   timeLabel.textContent = new Date(msg.createdAt).toLocaleTimeString();
+
                   const playStopBtn = document.createElement("button");
                   playStopBtn.textContent = "▶";
+
                   const seekBar = document.createElement("input");
                   seekBar.type = "range";
                   seekBar.value = 0;
                   seekBar.min = 0;
                   seekBar.step = 0.01;
+
                   const canvas = document.createElement("canvas");
                   canvas.width = 300;
                   canvas.height = 60;
@@ -428,9 +453,11 @@ document.addEventListener("DOMContentLoaded", () => {
                           seekBar.value = 0;
                       }
                   };
+
                   seekBar.oninput = () => {
                       if (currentAudio) currentAudio.currentTime = parseFloat(seekBar.value);
                   };
+
                   div.appendChild(orderLabel);
                   div.appendChild(timeLabel);
                   div.appendChild(playStopBtn);
@@ -454,6 +481,7 @@ document.addEventListener("DOMContentLoaded", () => {
       const audio = new Audio(URL.createObjectURL(blob));
       currentAudio = audio;
       audio.currentTime = parseFloat(seekBar.value) || 0;
+
       const audioContext = new (window.AudioContext || window.webkitAudioContext)();
       currentAudioContext = audioContext;
       const source = audioContext.createMediaElementSource(audio);
@@ -462,8 +490,8 @@ document.addEventListener("DOMContentLoaded", () => {
       const dataArray = new Uint8Array(analyser.frequencyBinCount);
       source.connect(analyser);
       analyser.connect(audioContext.destination);
-      canvas.style.display = "block";
 
+      canvas.style.display = "block";
       function draw() {
           const ctx = canvas.getContext("2d");
           currentAnimationId = requestAnimationFrame(draw);
@@ -501,7 +529,6 @@ document.addEventListener("DOMContentLoaded", () => {
           if (onEnded) onEnded();
       };
 
-      // iOS対応修正: audio.play() 時に AudioContext を resume する
       audio.play().then(() => {
           if (audioContext.state === 'suspended') {
               audioContext.resume();
@@ -579,7 +606,7 @@ document.addEventListener("DOMContentLoaded", () => {
           const cursor = e.target.result;
           if (!cursor) {
               document.getElementById("capacityDisplay").textContent =
-                  "使用容量：" + (total / 1024 / 1024).toFixed(1) + " MB";
+              "使用容量：" + (total / 1024 / 1024).toFixed(1) + " MB";
               return;
           }
           total += cursor.value.blob.size;
