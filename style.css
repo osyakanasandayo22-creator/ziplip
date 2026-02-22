@@ -339,7 +339,7 @@ input[type="range"]::-webkit-slider-thumb {
 
   button {
       width: 100%;
-      margin-bottom: 12px;
+      margin-bottom: 4px;
   }
   button:last-child {
     margin-bottom: 0;
