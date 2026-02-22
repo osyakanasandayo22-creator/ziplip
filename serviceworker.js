@@ -1,10 +1,9 @@
-const CACHE_NAME = 'BARI';
+const CACHE_NAME = 'ZIPLIP';
 const urlsToCache = [
   '/',
   '/index.html',
   '/style.css',
   '/script.js',
-  '/images/neta.png',
   '/images/icon-192.png',
   '/images/icon-512.png'
 ];
