@@ -4,15 +4,14 @@ document.addEventListener("DOMContentLoaded", () => {
     let mediaRecorder;
     let audioChunks = [];
     let isPlayingAll = false;
-    let audioQueue = [];
 
     const recordBtn = document.getElementById("recordBtn");
     const stopBtn = document.getElementById("stopBtn");
     const playAllBtn = document.getElementById("playAllBtn");
-    playAllBtn.onclick = playAll;
+    if (playAllBtn) playAllBtn.onclick = playAll;
 
     const deleteThreadBtn = document.getElementById("deleteThreadBtn");
-    deleteThreadBtn.onclick = deleteCurrentThread;
+    if (deleteThreadBtn) deleteThreadBtn.onclick = deleteCurrentThread;
 
     // IndexedDBの初期化
     const request = indexedDB.open("voiceAppDB", 2);
@@ -32,10 +31,6 @@ document.addEventListener("DOMContentLoaded", () => {
         renderThreadsByReplyCount();
         updateCapacity();
     };
-
-    function todayString() {
-        return new Date().toISOString().split("T");
-    }
 
     function deleteCurrentThread() {
         if (!currentThreadId) return;
@@ -59,51 +54,9 @@ document.addEventListener("DOMContentLoaded", () => {
         };
     }
 
-    function deleteMessage(messageId) {
-        const tx = db.transaction(["messages", "threads"], "readwrite");
-        const msgStore = tx.objectStore("messages");
-        msgStore.delete(messageId);
-        tx.oncomplete = () => {
-            recalculateThreadUpdatedAt(currentThreadId);
-        };
-    }
-
-    function recalculateThreadUpdatedAt(threadId) {
-        const tx = db.transaction(["messages", "threads"], "readwrite");
-        const msgStore = tx.objectStore("messages");
-        const threadStore = tx.objectStore("threads");
-        const index = msgStore.index("threadId");
-        const messages = [];
-        index.openCursor(IDBKeyRange.only(threadId)).onsuccess = e => {
-            const cursor = e.target.result;
-            if (!cursor) {
-                if (messages.length === 0) {
-                    threadStore.delete(threadId);
-                    closeThread();
-                    return;
-                }
-                const latest = Math.max(...messages.map(m => m.createdAt));
-                const getReq = threadStore.get(threadId);
-                getReq.onsuccess = () => {
-                    const thread = getReq.result;
-                    if (!thread) return;
-                    thread.lastUpdatedAt = latest;
-                    threadStore.put(thread);
-                };
-                return;
-            }
-            messages.push(cursor.value);
-            cursor.continue();
-        };
-        tx.oncomplete = () => {
-            renderMessages();
-            renderThreads();
-            updateCapacity();
-        };
-    }
-
     function renderThreads() {
         const list = document.getElementById("threadList");
+        if (!list) return;
         list.innerHTML = "";
         const tx = db.transaction("threads", "readonly");
         const store = tx.objectStore("threads");
@@ -317,7 +270,6 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     let countdownInterval;
-    let audioBlob;
     let audioContext;
     let analyser;
     let dataArray;
@@ -429,7 +381,7 @@ document.addEventListener("DOMContentLoaded", () => {
                     canvas.height = 60;
                     
                     playStopBtn.onclick = () => {
-                        // iOS対策: ユーザー操作の直後でAudioContextを生成または再開
+                        // iOS/スマホ対策: ボタンクリックの瞬間にContextを生成・再開
                         if (!currentAudioContext) {
                             currentAudioContext = new (window.AudioContext || window.webkitAudioContext)();
                         }
@@ -444,7 +396,6 @@ document.addEventListener("DOMContentLoaded", () => {
                             isPlayingAll = false;
                             stopCurrentAudio();
                             playStopBtn.textContent = "▶";
-                            seekBar.value = 0;
                         }
                     };
                     seekBar.oninput = () => {
@@ -469,91 +420,97 @@ document.addEventListener("DOMContentLoaded", () => {
     let currentAnimationId = null;
     let currentObjectURL = null;
 
-    function playAudioFromBlob(blob, canvas, seekBar, playStopBtn, onEnded) {
+    // モバイル・再起動後対応の強力な再生関数
+    async function playAudioFromBlob(blob, canvas, seekBar, playStopBtn, onEnded) {
         stopCurrentAudio();
 
-        // 以前のObjectURLがあれば解放
+        // 以前のURLを解放
         if (currentObjectURL) {
             URL.revokeObjectURL(currentObjectURL);
         }
 
-        // iOS Safari対策: 保存されていたBlobのMIMEタイプを補完して再生成
+        // 重要：BlobをArrayBuffer経由で再構築（iOSのIndexedDB不具合対策）
         const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
         const mimeType = isIOS ? "audio/mp4" : (blob.type || "audio/webm");
-        const safeBlob = new Blob([blob], { type: mimeType });
         
-        currentObjectURL = URL.createObjectURL(safeBlob);
-        
-        const audio = new Audio();
-        audio.src = currentObjectURL;
-        // iOS PWA対策: playsinline属性を疑似的にセット（audio要素には本来不要だがSafariで有効な場合がある）
-        audio.setAttribute("playsinline", "true");
-        currentAudio = audio;
-        audio.currentTime = parseFloat(seekBar.value) || 0;
+        try {
+            const arrayBuffer = await blob.arrayBuffer();
+            const safeBlob = new Blob([arrayBuffer], { type: mimeType });
+            currentObjectURL = URL.createObjectURL(safeBlob);
 
-        // 明示的にロード
-        audio.load();
+            const audio = new Audio();
+            audio.src = currentObjectURL;
+            audio.setAttribute("playsinline", "true");
+            audio.preload = "auto";
+            currentAudio = audio;
 
-        const audioCtx = currentAudioContext || new (window.AudioContext || window.webkitAudioContext)();
-        currentAudioContext = audioCtx;
-        
-        const source = audioCtx.createMediaElementSource(audio);
-        const analyserNode = audioCtx.createAnalyser();
-        analyserNode.fftSize = 256;
-        const dataArr = new Uint8Array(analyserNode.frequencyBinCount);
-        source.connect(analyserNode);
-        analyserNode.connect(audioCtx.destination);
+            // AudioContextの準備
+            const audioCtx = currentAudioContext || new (window.AudioContext || window.webkitAudioContext)();
+            currentAudioContext = audioCtx;
+            
+            const source = audioCtx.createMediaElementSource(audio);
+            const analyserNode = audioCtx.createAnalyser();
+            analyserNode.fftSize = 256;
+            const dataArr = new Uint8Array(analyserNode.frequencyBinCount);
+            source.connect(analyserNode);
+            analyserNode.connect(audioCtx.destination);
 
-        canvas.style.display = "block";
-        function draw() {
-            const ctx = canvas.getContext("2d");
-            currentAnimationId = requestAnimationFrame(draw);
-            analyserNode.getByteTimeDomainData(dataArr);
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-            ctx.lineWidth = 2;
-            ctx.strokeStyle = "#00ff66";
-            ctx.beginPath();
-            const sliceWidth = canvas.width / dataArr.length;
-            let x = 0;
-            for (let i = 0; i < dataArr.length; i++) {
-                const v = dataArr[i] / 128.0;
-                const y = (v * canvas.height) / 2;
-                if (i === 0) ctx.moveTo(x, y);
-                else ctx.lineTo(x, y);
-                x += sliceWidth;
-            }
-            ctx.lineTo(canvas.width, canvas.height / 2);
-            ctx.stroke();
-        }
-        draw();
+            // メタデータ読み込み完了時の処理（シークバー対応）
+            audio.onloadedmetadata = () => {
+                seekBar.max = audio.duration;
+                seekBar.value = 0;
+            };
 
-        audio.ontimeupdate = () => {
-            seekBar.value = audio.currentTime;
-        };
-        audio.onloadedmetadata = () => {
-            seekBar.max = audio.duration;
-        };
-        audio.onended = () => {
-            const ctx = canvas.getContext("2d");
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-            stopCurrentAudio();
-            seekBar.value = 0;
-            if (playStopBtn) playStopBtn.textContent = "▶";
-            if (onEnded) onEnded();
-        };
-
-        // 再生実行。SafariではPromiseのハンドリングが必須
-        const playPromise = audio.play();
-        if (playPromise !== undefined) {
-            playPromise.then(() => {
-                if (audioCtx.state === 'suspended') {
-                    audioCtx.resume();
+            // 再生中の処理
+            audio.ontimeupdate = () => {
+                if (!isNaN(audio.currentTime)) {
+                    seekBar.value = audio.currentTime;
                 }
-            }).catch(error => {
-                console.error("Playback failed:", error);
-                // 失敗した場合は再度resumeを試みる
-                audioCtx.resume().then(() => audio.play());
-            });
+            };
+
+            audio.onended = () => {
+                stopCurrentAudio();
+                if (playStopBtn) playStopBtn.textContent = "▶";
+                if (onEnded) onEnded();
+            };
+
+            // 波形描画
+            canvas.style.display = "block";
+            const draw = () => {
+                const ctx = canvas.getContext("2d");
+                currentAnimationId = requestAnimationFrame(draw);
+                analyserNode.getByteTimeDomainData(dataArr);
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                ctx.lineWidth = 2;
+                ctx.strokeStyle = "#00ff66";
+                ctx.beginPath();
+                const sliceWidth = canvas.width / dataArr.length;
+                let x = 0;
+                for (let i = 0; i < dataArr.length; i++) {
+                    const v = dataArr[i] / 128.0;
+                    const y = (v * canvas.height) / 2;
+                    if (i === 0) ctx.moveTo(x, y);
+                    else ctx.lineTo(x, y);
+                    x += sliceWidth;
+                }
+                ctx.lineTo(canvas.width, canvas.height / 2);
+                ctx.stroke();
+            };
+            draw();
+
+            // 明示的にロードして再生
+            audio.load();
+            const playPromise = audio.play();
+            if (playPromise !== undefined) {
+                playPromise.catch(error => {
+                    console.error("Playback failed:", error);
+                    // ユーザーアクションでの再試行を促すか、再resume
+                    audioCtx.resume().then(() => audio.play());
+                });
+            }
+
+        } catch (e) {
+            console.error("Blob conversion error:", e);
         }
     }
 
@@ -566,10 +523,6 @@ document.addEventListener("DOMContentLoaded", () => {
             cancelAnimationFrame(currentAnimationId);
             currentAnimationId = null;
         }
-        if (currentAudioContext && currentAudioContext.state !== 'closed') {
-            // Contextを閉じると次の再生でエラーになるため、
-            // 連続再生を考慮してcloseせず、必要に応じて管理する
-        }
     }
 
     function playAll() {
@@ -577,7 +530,6 @@ document.addEventListener("DOMContentLoaded", () => {
         stopCurrentAudio();
         isPlayingAll = true;
 
-        // iOS対策: 全体再生開始時にもContextを初期化
         if (!currentAudioContext) {
             currentAudioContext = new (window.AudioContext || window.webkitAudioContext)();
         }
@@ -603,7 +555,7 @@ document.addEventListener("DOMContentLoaded", () => {
         };
     }
 
-    function playSequential(messages) {
+    async function playSequential(messages) {
         if (!isPlayingAll || messages.length === 0) {
             isPlayingAll = false;
             return;
@@ -620,8 +572,8 @@ document.addEventListener("DOMContentLoaded", () => {
         const onEnded = () => {
             if (isPlayingAll) playSequential(messages);
         };
-        playAudioFromBlob(msg.blob, canvas, seekBar, playStopBtn, onEnded);
-        playStopBtn.textContent = "■";
+        await playAudioFromBlob(msg.blob, canvas, seekBar, playStopBtn, onEnded);
+        if (playStopBtn) playStopBtn.textContent = "■";
     }
 
     function stopAllPlayback() {
