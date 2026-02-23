@@ -381,7 +381,7 @@ document.addEventListener("DOMContentLoaded", () => {
                     canvas.height = 60;
                     
                     playStopBtn.onclick = () => {
-                        // iOS/スマホ対策: ボタンクリックの瞬間にContextを生成・再開
+                        // iOS/Safari対策: ユーザー操作の直後にAudioContextを即時レジューム
                         if (!currentAudioContext) {
                             currentAudioContext = new (window.AudioContext || window.webkitAudioContext)();
                         }
@@ -420,20 +420,18 @@ document.addEventListener("DOMContentLoaded", () => {
     let currentAnimationId = null;
     let currentObjectURL = null;
 
-    // モバイル・再起動後対応の強力な再生関数
     async function playAudioFromBlob(blob, canvas, seekBar, playStopBtn, onEnded) {
         stopCurrentAudio();
 
-        // 以前のURLを解放
         if (currentObjectURL) {
             URL.revokeObjectURL(currentObjectURL);
         }
 
-        // 重要：BlobをArrayBuffer経由で再構築（iOSのIndexedDB不具合対策）
         const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
         const mimeType = isIOS ? "audio/mp4" : (blob.type || "audio/webm");
         
         try {
+            // 再起動後のBlobを強制的に再認識させる
             const arrayBuffer = await blob.arrayBuffer();
             const safeBlob = new Blob([arrayBuffer], { type: mimeType });
             currentObjectURL = URL.createObjectURL(safeBlob);
@@ -444,7 +442,6 @@ document.addEventListener("DOMContentLoaded", () => {
             audio.preload = "auto";
             currentAudio = audio;
 
-            // AudioContextの準備
             const audioCtx = currentAudioContext || new (window.AudioContext || window.webkitAudioContext)();
             currentAudioContext = audioCtx;
             
@@ -455,13 +452,11 @@ document.addEventListener("DOMContentLoaded", () => {
             source.connect(analyserNode);
             analyserNode.connect(audioCtx.destination);
 
-            // メタデータ読み込み完了時の処理（シークバー対応）
             audio.onloadedmetadata = () => {
                 seekBar.max = audio.duration;
                 seekBar.value = 0;
             };
 
-            // 再生中の処理
             audio.ontimeupdate = () => {
                 if (!isNaN(audio.currentTime)) {
                     seekBar.value = audio.currentTime;
@@ -474,7 +469,6 @@ document.addEventListener("DOMContentLoaded", () => {
                 if (onEnded) onEnded();
             };
 
-            // 波形描画
             canvas.style.display = "block";
             const draw = () => {
                 const ctx = canvas.getContext("2d");
@@ -498,19 +492,18 @@ document.addEventListener("DOMContentLoaded", () => {
             };
             draw();
 
-            // 明示的にロードして再生
             audio.load();
             const playPromise = audio.play();
             if (playPromise !== undefined) {
                 playPromise.catch(error => {
                     console.error("Playback failed:", error);
-                    // ユーザーアクションでの再試行を促すか、再resume
+                    // 失敗時のセーフティ
                     audioCtx.resume().then(() => audio.play());
                 });
             }
 
         } catch (e) {
-            console.error("Blob conversion error:", e);
+            console.error("Audio Load Error:", e);
         }
     }
 
