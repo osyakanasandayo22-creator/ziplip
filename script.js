@@ -1,15 +1,15 @@
 document.addEventListener("DOMContentLoaded", () => {
-  // デバッグ用：スマホで新しい版が読み込まれたか確認するため
-  console.log("Script version: 1.4 - Mobile Playback & Persistence Enhanced");
+  // デバッグ用：スマホで最新版が読み込まれたか確認
+  console.log("Script version: 1.6 - Full Source Restored & Mobile Playback Fixed");
 
   let db;
   let currentThreadId = null;
   let mediaRecorder;
   let audioChunks = [];
   let isPlayingAll = false;
-  let audioQueue = [];
+  let audioQueue = []; // ソース[1]に基づき保持
 
-  // 録音・解析用変数のグローバル宣言
+  // 録音・解析用変数のグローバル宣言 [1]
   let audioContext;
   let analyser;
   let dataArray;
@@ -26,7 +26,7 @@ document.addEventListener("DOMContentLoaded", () => {
   if (playAllBtn) playAllBtn.onclick = playAll;
   if (deleteThreadBtn) deleteThreadBtn.onclick = deleteCurrentThread;
 
-  // IndexedDBの初期化 [4][5]
+  // --- IndexedDBの初期化 [2][3] ---
   const request = indexedDB.open("voiceAppDB", 2);
 
   request.onupgradeneeded = e => {
@@ -45,11 +45,15 @@ document.addEventListener("DOMContentLoaded", () => {
 
   request.onsuccess = e => {
     db = e.target.result;
-    renderThreadsByReplyCount();
+    renderThreadsByReplyCount(); // 初期表示
     updateCapacity();
   };
 
-  // ユーティリティ・削除系 [5][6][7][8]
+  // --- ユーティリティ・削除系ロジック [3][4][5][6] ---
+  function todayString() {
+    return new Date().toISOString().split("T");
+  }
+
   function deleteCurrentThread() {
     if (!currentThreadId) return;
     const confirmed = confirm("本当に削除しますか？");
@@ -69,7 +73,7 @@ document.addEventListener("DOMContentLoaded", () => {
     tx.objectStore("threads").delete(currentThreadId);
     tx.oncomplete = () => {
       closeThread();
-      renderThreadsByReplyCount();
+      renderThreads(); // ソース[4]の呼び出しを維持
       updateCapacity();
     };
   }
@@ -113,12 +117,45 @@ document.addEventListener("DOMContentLoaded", () => {
     };
     tx.oncomplete = () => {
       renderMessages();
-      renderThreadsByReplyCount();
+      renderThreads();
       updateCapacity();
     };
   }
 
-  // スレッド一覧表示・検索 [9][10][11][12]
+  // --- スレッド表示・検索ロジック [7][8][9][10][11][12] ---
+  function renderThreads() {
+    const list = document.getElementById("threadList");
+    if (!list) return;
+    list.innerHTML = "";
+    const tx = db.transaction("threads", "readonly");
+    const store = tx.objectStore("threads");
+    const index = store.index("lastUpdatedAt");
+
+    index.openCursor(null, "prev").onsuccess = e => {
+      const cursor = e.target.result;
+      if (!cursor) return;
+      const thread = cursor.value;
+      const card = document.createElement("div");
+      card.className = "threadCard";
+      countMessages(thread.id, count => {
+        const contentDiv = document.createElement("div");
+        contentDiv.className = "threadCardContent";
+        const titleDiv = document.createElement("div");
+        titleDiv.className = "title";
+        titleDiv.textContent = thread.title;
+        const infoDiv = document.createElement("div");
+        infoDiv.className = "threadInfo";
+        infoDiv.textContent = `${new Date(thread.lastUpdatedAt).toLocaleString()} - レス ${count} 件`;
+        contentDiv.appendChild(titleDiv);
+        contentDiv.appendChild(infoDiv);
+        card.appendChild(contentDiv);
+      });
+      card.onclick = () => openThread(thread.id);
+      list.appendChild(card);
+      cursor.continue();
+    };
+  }
+
   const searchInput = document.getElementById("threadSearchInput");
   if (searchInput) {
     searchInput.addEventListener("keydown", (e) => {
@@ -133,8 +170,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const list = document.getElementById("threadList");
     if (!list) return;
     list.innerHTML = "";
-
-    const tx = db.transaction(["threads", "messages"], "readonly");
+    const tx = db.transaction("threads", "readonly");
     const store = tx.objectStore("threads");
     const threadsWithCount = [];
     let remaining = 0;
@@ -142,7 +178,7 @@ document.addEventListener("DOMContentLoaded", () => {
     store.openCursor().onsuccess = e => {
       const cursor = e.target.result;
       if (!cursor) {
-        if (remaining === 0) drawThreads(threadsWithCount, list);
+        if (remaining === 0) drawThreads();
         return;
       }
       const thread = cursor.value;
@@ -154,32 +190,31 @@ document.addEventListener("DOMContentLoaded", () => {
       countMessages(thread.id, count => {
         threadsWithCount.push({ thread, count });
         remaining--;
-        if (remaining === 0) drawThreads(threadsWithCount, list);
+        if (remaining === 0) drawThreads();
       });
       cursor.continue();
     };
-  }
 
-  function drawThreads(threadsWithCount, list) {
-    threadsWithCount.sort((a, b) => b.count - a.count);
-    threadsWithCount.forEach(({ thread, count }) => {
-      const card = document.createElement("div");
-      card.className = "threadCard";
-      const contentDiv = document.createElement("div");
-      contentDiv.className = "threadCardContent";
-      const titleDiv = document.createElement("div");
-      titleDiv.className = "title";
-      titleDiv.textContent = thread.title;
-      const infoDiv = document.createElement("div");
-      infoDiv.className = "threadInfo";
-      infoDiv.textContent = `${new Date(thread.lastUpdatedAt).toLocaleString()} - レス ${count} 件`;
-      
-      contentDiv.appendChild(titleDiv);
-      contentDiv.appendChild(infoDiv);
-      card.appendChild(contentDiv);
-      card.onclick = () => openThread(thread.id);
-      list.appendChild(card);
-    });
+    function drawThreads() {
+      threadsWithCount.sort((a, b) => b.count - a.count);
+      threadsWithCount.forEach(({ thread, count }) => {
+        const card = document.createElement("div");
+        card.className = "threadCard";
+        const contentDiv = document.createElement("div");
+        contentDiv.className = "threadCardContent";
+        const titleDiv = document.createElement("div");
+        titleDiv.className = "title";
+        titleDiv.textContent = thread.title;
+        const infoDiv = document.createElement("div");
+        infoDiv.className = "threadInfo";
+        infoDiv.textContent = `${new Date(thread.lastUpdatedAt).toLocaleString()} - レス ${count} 件`;
+        contentDiv.appendChild(titleDiv);
+        contentDiv.appendChild(infoDiv);
+        card.appendChild(contentDiv);
+        card.onclick = () => openThread(thread.id);
+        list.appendChild(card);
+      });
+    }
   }
 
   function countMessages(threadId, callback) {
@@ -189,16 +224,12 @@ document.addEventListener("DOMContentLoaded", () => {
     let count = 0;
     index.openCursor(IDBKeyRange.only(threadId)).onsuccess = e => {
       const cursor = e.target.result;
-      if (cursor) {
-        count++;
-        cursor.continue();
-      } else {
-        callback(count);
-      }
+      if (cursor) { count++; cursor.continue(); }
+      else { callback(count); }
     };
   }
 
-  // スレッド開閉 [13][14]
+  // --- スレッド開閉 [13][14] ---
   function openThread(threadId) {
     currentThreadId = threadId;
     const tx = db.transaction("threads", "readonly");
@@ -223,7 +254,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const closeModalBtn = document.getElementById("closeModalBtn");
   if (closeModalBtn) closeModalBtn.onclick = closeThread;
 
-  // 新規スレッド作成録音ロジック [15][16][17][18][19]
+  // --- 新規スレッド作成録音ロジック [14][15][16][17][18][19] ---
   const createModal = document.getElementById("createThreadModal");
   const startThreadRecordBtn = document.getElementById("startThreadRecordBtn");
   const saveThreadBtn = document.getElementById("saveThreadBtn");
@@ -252,39 +283,22 @@ document.addEventListener("DOMContentLoaded", () => {
         analyser = audioContext.createAnalyser();
         analyser.fftSize = 2048;
         sourceNode.connect(analyser);
-        const bufferLength = analyser.frequencyBinCount;
-        dataArray = new Uint8Array(bufferLength);
+        dataArray = new Uint8Array(analyser.frequencyBinCount);
         drawLiveWave();
 
-        let mimeType = "audio/webm";
-        if (/iPhone|iPad|iPod/i.test(navigator.userAgent)) {
-          mimeType = "audio/mp4";
-        }
+        let mimeType = /iPhone|iPad|iPod/i.test(navigator.userAgent) ? "audio/mp4" : "audio/webm";
         mediaRecorder = new MediaRecorder(recordingStream, { mimeType });
         audioChunks = [];
         mediaRecorder.ondataavailable = e => audioChunks.push(e.data);
         mediaRecorder.onstop = () => {
           threadAudioBlob = new Blob(audioChunks, { type: mimeType });
-          cancelAnimationFrame(animationId);
-          if (audioContext) audioContext.close();
-          recordingStream.getTracks().forEach(track => track.stop());
-          document.getElementById("recordBox").style.display = "none";
+          cleanupRecordingState();
           titleInputArea.style.display = "block";
           threadTitleInput.focus();
         };
-
         mediaRecorder.start();
         document.getElementById("recordBox").style.display = "block";
-        let timeLeft = 5;
-        document.getElementById("countdown").textContent = timeLeft;
-        countdownInterval = setInterval(() => {
-          timeLeft--;
-          document.getElementById("countdown").textContent = timeLeft;
-          if (timeLeft <= 0) {
-            clearInterval(countdownInterval);
-            mediaRecorder.stop();
-          }
-        }, 1000);
+        startCountdown();
       } catch (err) {
         console.error("録音開始に失敗:", err);
         startThreadRecordBtn.style.display = "inline-block";
@@ -300,21 +314,19 @@ document.addEventListener("DOMContentLoaded", () => {
       const now = Date.now();
       const tx = db.transaction(["threads", "messages"], "readwrite");
       tx.objectStore("threads").add({ id, title, lastUpdatedAt: now });
-      tx.objectStore("messages").add({
-        id: crypto.randomUUID(),
-        threadId: id,
-        createdAt: now,
-        blob: threadAudioBlob
-      });
+      tx.objectStore("messages").add({ id: crypto.randomUUID(), threadId: id, createdAt: now, blob: threadAudioBlob });
       tx.oncomplete = () => {
         createModal.classList.remove("active");
-        renderThreadsByReplyCount();
+        threadTitleInput.value = ""; // ソース[19]を維持
+        titleInputArea.style.display = "none";
+        startThreadRecordBtn.disabled = false;
+        renderThreads();
         updateCapacity();
       };
     };
   }
 
-  // スレッド内返信録音 [20][21][22][23]
+  // --- スレッド内返信録音 [19][20][21][22][23] ---
   function startRecording() {
     if (mediaRecorder && mediaRecorder.state === "recording") return;
     navigator.mediaDevices.getUserMedia({ audio: true }).then(stream => {
@@ -324,38 +336,28 @@ document.addEventListener("DOMContentLoaded", () => {
       analyser = audioContext.createAnalyser();
       analyser.fftSize = 2048;
       sourceNode.connect(analyser);
-      const bufferLength = analyser.frequencyBinCount;
-      dataArray = new Uint8Array(bufferLength);
+      dataArray = new Uint8Array(analyser.frequencyBinCount);
       drawLiveWave();
 
-      let mimeType = "audio/webm";
-      if (/iPhone|iPad|iPod/i.test(navigator.userAgent)) {
-        mimeType = "audio/mp4";
-      }
+      let mimeType = /iPhone|iPad|iPod/i.test(navigator.userAgent) ? "audio/mp4" : "audio/webm";
       mediaRecorder = new MediaRecorder(stream, { mimeType });
       audioChunks = [];
       mediaRecorder.ondataavailable = e => audioChunks.push(e.data);
       mediaRecorder.onstop = () => {
         const blob = new Blob(audioChunks, { type: mimeType });
-        cancelAnimationFrame(animationId);
-        if (audioContext) audioContext.close();
-        stream.getTracks().forEach(track => track.stop());
-        document.getElementById("recordBox").style.display = "none";
+        cleanupRecordingState();
         saveReplyBlob(blob);
       };
       mediaRecorder.start();
       document.getElementById("recordBox").style.display = "block";
-      let timeLeft = 5;
-      document.getElementById("countdown").textContent = timeLeft;
-      countdownInterval = setInterval(() => {
-        timeLeft--;
-        document.getElementById("countdown").textContent = timeLeft;
-        if (timeLeft <= 0) {
-          clearInterval(countdownInterval);
-          mediaRecorder.stop();
-        }
-      }, 1000);
+      startCountdown();
     });
+  }
+
+  function stopRecording() {
+    if (mediaRecorder) mediaRecorder.stop();
+    if (recordBtn) recordBtn.disabled = false;
+    if (stopBtn) stopBtn.disabled = true;
   }
 
   function saveReplyBlob(blob) {
@@ -374,12 +376,39 @@ document.addEventListener("DOMContentLoaded", () => {
     };
     tx.oncomplete = () => {
       renderMessages();
-      renderThreadsByReplyCount();
+      renderThreads();
       updateCapacity();
     };
   }
 
-  // メッセージレンダリング [24][25][26][27]
+  function startCountdown() {
+    let timeLeft = 5;
+    document.getElementById("countdown").textContent = timeLeft;
+    clearInterval(countdownInterval);
+    countdownInterval = setInterval(() => {
+      timeLeft--;
+      document.getElementById("countdown").textContent = timeLeft;
+      if (timeLeft <= 0) {
+        clearInterval(countdownInterval);
+        stopRecording();
+      }
+    }, 1000);
+  }
+
+  function cleanupRecordingState() {
+    cancelAnimationFrame(animationId);
+    if (audioContext) audioContext.close();
+    if (recordingStream) recordingStream.getTracks().forEach(track => track.stop());
+    document.getElementById("recordBox").style.display = "none";
+    clearInterval(countdownInterval);
+  }
+
+  // --- 再生ロジック（最重要：スマホ再生バグ修正） [24][25][26][27][28][29][30][31][32] ---
+  let currentAudio = null;
+  let currentAudioContext = null;
+  let currentAnimationId = null;
+  let currentObjectURL = null;
+
   function renderMessages() {
     const list = document.getElementById("messageList");
     if (!list) return;
@@ -391,8 +420,7 @@ document.addEventListener("DOMContentLoaded", () => {
     index.openCursor(IDBKeyRange.only(currentThreadId)).onsuccess = e => {
       const cursor = e.target.result;
       if (!cursor) {
-        messages.sort((a, b) => a.createdAt - b.createdAt);
-        messages.forEach((msg, idx) => {
+        messages.sort((a, b) => a.createdAt - b.createdAt).forEach((msg, idx) => {
           const div = document.createElement("div");
           div.className = "messageItem";
           div.dataset.msgId = msg.id;
@@ -420,6 +448,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
           playStopBtn.onclick = () => {
             if (currentAudio === null) {
+              // 解決策：再生直前にDBのBlobから新しいURLを生成 [28]
               playAudioFromBlob(msg.blob, canvas, seekBar, playStopBtn, () => {
                 playStopBtn.textContent = "▶";
                 seekBar.value = 0;
@@ -429,6 +458,7 @@ document.addEventListener("DOMContentLoaded", () => {
               isPlayingAll = false;
               stopCurrentAudio();
               playStopBtn.textContent = "▶";
+              seekBar.value = 0;
             }
           };
 
@@ -450,16 +480,10 @@ document.addEventListener("DOMContentLoaded", () => {
     };
   }
 
-  // 再生ロジック・モバイル対策 [1][3][28][29][2]
-  let currentAudio = null;
-  let currentAudioContext = null;
-  let currentAnimationId = null;
-  let currentObjectURL = null;
-
   function playAudioFromBlob(blob, canvas, seekBar, playStopBtn, onEnded) {
     stopCurrentAudio();
 
-    // iOS/スマホ対策: IndexedDBから読み込んだBlobを「再生可能な形式」で包み直す
+    // 解決策1：MIMEタイプの補正とBlobの再生成 [28]
     const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
     const mimeType = isIOS ? "audio/mp4" : (blob.type || "audio/webm");
     const safeBlob = new Blob([blob], { type: mimeType });
@@ -473,6 +497,7 @@ document.addEventListener("DOMContentLoaded", () => {
     audio.preload = "auto";
     currentAudio = audio;
 
+    // 解決策2：AudioContextの確実な再開 [28][29]
     if (!currentAudioContext) {
       currentAudioContext = new (window.AudioContext || window.webkitAudioContext)();
     }
@@ -481,9 +506,9 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     audio.onloadedmetadata = () => {
-      // 録音データでdurationがInfinityになる対策
+      // 解決策3：録音データのduration Infinity対策
       if (audio.duration === Infinity) {
-        audio.currentTime = 1e10; // 一時的に後ろに飛ばして計算を促す
+        audio.currentTime = 1e10; // 最後に飛ばして長さを強制計算
         audio.ontimeupdate = () => {
           audio.ontimeupdate = null;
           audio.currentTime = 0;
@@ -502,10 +527,12 @@ document.addEventListener("DOMContentLoaded", () => {
       const ctx = canvas.getContext("2d");
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       stopCurrentAudio();
+      seekBar.value = 0;
       if (playStopBtn) playStopBtn.textContent = "▶";
       if (onEnded) onEnded();
     };
 
+    // 可視化 [30][31]
     try {
       const source = currentAudioContext.createMediaElementSource(audio);
       const analyserNode = currentAudioContext.createAnalyser();
@@ -514,38 +541,29 @@ document.addEventListener("DOMContentLoaded", () => {
       source.connect(analyserNode);
       analyserNode.connect(currentAudioContext.destination);
 
-      function draw() {
+      const draw = () => {
         const ctx = canvas.getContext("2d");
         currentAnimationId = requestAnimationFrame(draw);
         analyserNode.getByteTimeDomainData(dataArr);
         ctx.clearRect(0, 0, canvas.width, canvas.height);
-        ctx.lineWidth = 2;
-        ctx.strokeStyle = "#00ff66";
-        ctx.beginPath();
-        const sliceWidth = canvas.width / dataArr.length;
-        let x = 0;
+        ctx.lineWidth = 2; ctx.strokeStyle = "#00ff66"; ctx.beginPath();
+        let x = 0; const sliceWidth = canvas.width / dataArr.length;
         for (let i = 0; i < dataArr.length; i++) {
-          const v = dataArr[i] / 128.0;
-          const y = (v * canvas.height) / 2;
-          if (i === 0) ctx.moveTo(x, y);
-          else ctx.lineTo(x, y);
+          const v = dataArr[i] / 128.0; const y = (v * canvas.height) / 2;
+          if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
           x += sliceWidth;
         }
-        ctx.lineTo(canvas.width, canvas.height / 2);
-        ctx.stroke();
-      }
+        ctx.lineTo(canvas.width, canvas.height / 2); ctx.stroke();
+      };
       draw();
     } catch (e) {
-      console.warn("Visualizer connection issue:", e);
+      console.warn("Visualizer issue:", e);
     }
 
-    const playPromise = audio.play();
-    if (playPromise !== undefined) {
-      playPromise.catch(error => {
-        console.error("Playback failed:", error);
-        currentAudioContext.resume().then(() => audio.play());
-      });
-    }
+    audio.play().catch(err => {
+      console.error("Playback error:", err);
+      currentAudioContext.resume().then(() => audio.play());
+    });
   }
 
   function stopCurrentAudio() {
@@ -561,7 +579,7 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }
 
-  // 連続再生 [30][31][32]
+  // --- 連続再生 [32][33][34][35] ---
   function playAll() {
     if (isPlayingAll || !currentThreadId) return;
     stopCurrentAudio();
@@ -608,7 +626,7 @@ document.addEventListener("DOMContentLoaded", () => {
     stopCurrentAudio();
   }
 
-  // 容量表示 [32][33]
+  // --- 容量表示 [35][36] ---
   function updateCapacity() {
     let total = 0;
     if (!db) return;
@@ -625,7 +643,7 @@ document.addEventListener("DOMContentLoaded", () => {
     };
   }
 
-  // 録音波形描画 [33][34]
+  // --- 録音波形描画 [36][37] ---
   function drawLiveWave() {
     const canvas = document.getElementById("waveCanvas");
     if (!canvas) return;
@@ -633,25 +651,17 @@ document.addEventListener("DOMContentLoaded", () => {
     animationId = requestAnimationFrame(drawLiveWave);
     analyser.getByteTimeDomainData(dataArray);
     ctx.clearRect(0, 0, canvas.width, canvas.height);
-    ctx.lineWidth = 2;
-    ctx.strokeStyle = "#00ff99";
-    ctx.beginPath();
+    ctx.lineWidth = 2; ctx.strokeStyle = "#00ff99"; ctx.beginPath();
     const sliceWidth = canvas.width / dataArray.length;
     let x = 0;
     for (let i = 0; i < dataArray.length; i++) {
-      const v = dataArray[i] / 128.0;
-      const y = (v * canvas.height) / 2;
-      if (i === 0) ctx.moveTo(x, y);
-      else ctx.lineTo(x, y);
+      const v = dataArray[i] / 128.0; const y = (v * canvas.height) / 2;
+      if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
       x += sliceWidth;
     }
-    ctx.lineTo(canvas.width, canvas.height / 2);
-    ctx.stroke();
+    ctx.lineTo(canvas.width, canvas.height / 2); ctx.stroke();
   }
 
   if (recordBtn) recordBtn.onclick = startRecording;
   if (stopBtn) stopBtn.onclick = stopRecording;
-  function stopRecording() {
-    if (mediaRecorder) mediaRecorder.stop();
-  }
 });
