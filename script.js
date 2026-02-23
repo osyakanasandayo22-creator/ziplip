@@ -1,4 +1,7 @@
 document.addEventListener("DOMContentLoaded", () => {
+    // デバッグ用：スマホで新しい版が読み込まれたか確認するため
+    console.log("Script version: 1.2 - Mobile Fix Applied");
+  
     let db;
     let currentThreadId = null;
     let mediaRecorder;
@@ -275,7 +278,10 @@ document.addEventListener("DOMContentLoaded", () => {
         startThreadRecordBtn.style.display = "none";
         try {
           recordingStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+          
+          // iOS対策: 録音時もContextを明示的に作成
           audioContext = new (window.AudioContext || window.webkitAudioContext)();
+          
           sourceNode = audioContext.createMediaStreamSource(recordingStream);
           analyser = audioContext.createAnalyser();
           analyser.fftSize = 2048;
@@ -401,8 +407,8 @@ document.addEventListener("DOMContentLoaded", () => {
   
     function stopRecording() {
       if (mediaRecorder) mediaRecorder.stop();
-      recordBtn.disabled = false;
-      stopBtn.disabled = true;
+      if (recordBtn) recordBtn.disabled = false;
+      if (stopBtn) stopBtn.disabled = true;
     }
   
     function saveReplyBlob(blob) {
@@ -466,7 +472,7 @@ document.addEventListener("DOMContentLoaded", () => {
             canvas.height = 60;
   
             playStopBtn.onclick = () => {
-              // iOS対策: クリックイベントの直後にAudioContextを生成/再開
+              // iOS最重要対策: タップの瞬間にContextを作成/再開
               if (!currentAudioContext) {
                 currentAudioContext = new (window.AudioContext || window.webkitAudioContext)();
               }
@@ -518,7 +524,7 @@ document.addEventListener("DOMContentLoaded", () => {
         URL.revokeObjectURL(currentObjectURL);
       }
   
-      // iOS Safari対策: 保存されていたBlobを再生成しMIMEを明示
+      // iOS Safari対策: 保存されていたBlobをMIMEを明示して再ラップ
       const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
       const mimeType = isIOS ? "audio/mp4" : (blob.type || "audio/webm");
       const safeBlob = new Blob([blob], { type: mimeType });
@@ -526,18 +532,16 @@ document.addEventListener("DOMContentLoaded", () => {
   
       const audio = new Audio();
       audio.src = currentObjectURL;
-      // iOS対策: 属性を明示的にセット
+      // iOS対策: playsinline属性とpreloadを明示
       audio.setAttribute("playsinline", "true");
       audio.setAttribute("webkit-playsinline", "true");
       audio.preload = "auto";
       currentAudio = audio;
   
-      // シークバーの初期化
       audio.onloadedmetadata = () => {
         seekBar.max = audio.duration;
       };
   
-      // 再生中にシークバーを更新
       audio.ontimeupdate = () => {
         seekBar.value = audio.currentTime;
       };
@@ -551,11 +555,10 @@ document.addEventListener("DOMContentLoaded", () => {
         if (onEnded) onEnded();
       };
   
-      // AudioContextと接続（波形表示用）
+      // 音声解析（波形）の準備
       const audioCtx = currentAudioContext || new (window.AudioContext || window.webkitAudioContext)();
       currentAudioContext = audioCtx;
       
-      // iOS Safariでは再生開始後にソースを作成・接続しないと音が出ない場合がある
       const source = audioCtx.createMediaElementSource(audio);
       const analyserNode = audioCtx.createAnalyser();
       analyserNode.fftSize = 256;
@@ -586,7 +589,7 @@ document.addEventListener("DOMContentLoaded", () => {
       }
       draw();
   
-      // 再生実行。Promiseで失敗をハンドリング
+      // 再生実行。iOSではPromiseによるハンドリングが必要
       const playPromise = audio.play();
       if (playPromise !== undefined) {
         playPromise.then(() => {
@@ -594,8 +597,8 @@ document.addEventListener("DOMContentLoaded", () => {
             audioCtx.resume();
           }
         }).catch(error => {
-          console.error("再生失敗:", error);
-          // 失敗時は再度ユーザー操作待ちでresumeが必要な可能性があるため通知
+          console.error("Playback failed:", error);
+          // 失敗時は再度resumeを試みて再実行
           audioCtx.resume().then(() => audio.play());
         });
       }
@@ -604,7 +607,7 @@ document.addEventListener("DOMContentLoaded", () => {
     function stopCurrentAudio() {
       if (currentAudio) {
         currentAudio.pause();
-        currentAudio.src = ""; // リソース解放
+        currentAudio.src = ""; // リソースの解放
         currentAudio = null;
       }
       if (currentAnimationId) {
