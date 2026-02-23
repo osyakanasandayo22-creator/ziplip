@@ -1,6 +1,6 @@
 document.addEventListener("DOMContentLoaded", () => {
     // デバッグ用：スマホで新しい版が読み込まれたか確認するため
-    console.log("Script version: 1.2 - Mobile Fix Applied");
+    console.log("Script version: 1.3 - Persistence & Mobile Playback Fix");
   
     let db;
     let currentThreadId = null;
@@ -8,6 +8,15 @@ document.addEventListener("DOMContentLoaded", () => {
     let audioChunks = [];
     let isPlayingAll = false;
     let audioQueue = [];
+    
+    // 録音・解析用変数のグローバル宣言
+    let audioContext;
+    let analyser;
+    let dataArray;
+    let animationId;
+    let sourceNode;
+    let recordingStream;
+    let countdownInterval;
   
     const recordBtn = document.getElementById("recordBtn");
     const stopBtn = document.getElementById("stopBtn");
@@ -278,8 +287,6 @@ document.addEventListener("DOMContentLoaded", () => {
         startThreadRecordBtn.style.display = "none";
         try {
           recordingStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-          
-          // iOS対策: 録音時もContextを明示的に作成
           audioContext = new (window.AudioContext || window.webkitAudioContext)();
           
           sourceNode = audioContext.createMediaStreamSource(recordingStream);
@@ -349,15 +356,6 @@ document.addEventListener("DOMContentLoaded", () => {
         };
       };
     }
-  
-    let countdownInterval;
-    let audioBlob;
-    let audioContext;
-    let analyser;
-    let dataArray;
-    let animationId;
-    let sourceNode;
-    let recordingStream;
   
     function startRecording() {
       if (mediaRecorder && mediaRecorder.state === "recording") return;
@@ -472,15 +470,8 @@ document.addEventListener("DOMContentLoaded", () => {
             canvas.height = 60;
   
             playStopBtn.onclick = () => {
-              // iOS最重要対策: タップの瞬間にContextを作成/再開
-              if (!currentAudioContext) {
-                currentAudioContext = new (window.AudioContext || window.webkitAudioContext)();
-              }
-              if (currentAudioContext.state === 'suspended') {
-                currentAudioContext.resume();
-              }
-  
               if (currentAudio === null) {
+                // 再生開始。ここでのmsg.blobはIndexedDBから復元したもの
                 playAudioFromBlob(msg.blob, canvas, seekBar, playStopBtn, () => {
                   playStopBtn.textContent = "▶";
                   seekBar.value = 0;
@@ -520,23 +511,31 @@ document.addEventListener("DOMContentLoaded", () => {
     function playAudioFromBlob(blob, canvas, seekBar, playStopBtn, onEnded) {
       stopCurrentAudio();
   
+      // iOS/スマホ対策: IndexedDBから読み込んだBlobを「再生可能な形式」で包み直す
+      const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
+      const mimeType = isIOS ? "audio/mp4" : (blob.type || "audio/webm");
+      
+      // 重要：既存のBlobデータを使って、新しいBlobオブジェクトを生成し直す
+      const safeBlob = new Blob([blob], { type: mimeType });
+      
       if (currentObjectURL) {
         URL.revokeObjectURL(currentObjectURL);
       }
-  
-      // iOS Safari対策: 保存されていたBlobをMIMEを明示して再ラップ
-      const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
-      const mimeType = isIOS ? "audio/mp4" : (blob.type || "audio/webm");
-      const safeBlob = new Blob([blob], { type: mimeType });
       currentObjectURL = URL.createObjectURL(safeBlob);
   
       const audio = new Audio();
       audio.src = currentObjectURL;
-      // iOS対策: playsinline属性とpreloadを明示
       audio.setAttribute("playsinline", "true");
-      audio.setAttribute("webkit-playsinline", "true");
       audio.preload = "auto";
       currentAudio = audio;
+  
+      // AudioContextの初期化と再開（ユーザー操作内で行う）
+      if (!currentAudioContext) {
+        currentAudioContext = new (window.AudioContext || window.webkitAudioContext)();
+      }
+      if (currentAudioContext.state === 'suspended') {
+        currentAudioContext.resume();
+      }
   
       audio.onloadedmetadata = () => {
         seekBar.max = audio.duration;
@@ -555,51 +554,46 @@ document.addEventListener("DOMContentLoaded", () => {
         if (onEnded) onEnded();
       };
   
-      // 音声解析（波形）の準備
-      const audioCtx = currentAudioContext || new (window.AudioContext || window.webkitAudioContext)();
-      currentAudioContext = audioCtx;
-      
-      const source = audioCtx.createMediaElementSource(audio);
-      const analyserNode = audioCtx.createAnalyser();
-      analyserNode.fftSize = 256;
-      const dataArr = new Uint8Array(analyserNode.frequencyBinCount);
-      source.connect(analyserNode);
-      analyserNode.connect(audioCtx.destination);
+      // 波形表示のセットアップ
+      try {
+        const source = currentAudioContext.createMediaElementSource(audio);
+        const analyserNode = currentAudioContext.createAnalyser();
+        analyserNode.fftSize = 256;
+        const dataArr = new Uint8Array(analyserNode.frequencyBinCount);
+        source.connect(analyserNode);
+        analyserNode.connect(currentAudioContext.destination);
   
-      canvas.style.display = "block";
-      function draw() {
-        const ctx = canvas.getContext("2d");
-        currentAnimationId = requestAnimationFrame(draw);
-        analyserNode.getByteTimeDomainData(dataArr);
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-        ctx.lineWidth = 2;
-        ctx.strokeStyle = "#00ff66";
-        ctx.beginPath();
-        const sliceWidth = canvas.width / dataArr.length;
-        let x = 0;
-        for (let i = 0; i < dataArr.length; i++) {
-          const v = dataArr[i] / 128.0;
-          const y = (v * canvas.height) / 2;
-          if (i === 0) ctx.moveTo(x, y);
-          else ctx.lineTo(x, y);
-          x += sliceWidth;
+        function draw() {
+          const ctx = canvas.getContext("2d");
+          currentAnimationId = requestAnimationFrame(draw);
+          analyserNode.getByteTimeDomainData(dataArr);
+          ctx.clearRect(0, 0, canvas.width, canvas.height);
+          ctx.lineWidth = 2;
+          ctx.strokeStyle = "#00ff66";
+          ctx.beginPath();
+          const sliceWidth = canvas.width / dataArr.length;
+          let x = 0;
+          for (let i = 0; i < dataArr.length; i++) {
+            const v = dataArr[i] / 128.0;
+            const y = (v * canvas.height) / 2;
+            if (i === 0) ctx.moveTo(x, y);
+            else ctx.lineTo(x, y);
+            x += sliceWidth;
+          }
+          ctx.lineTo(canvas.width, canvas.height / 2);
+          ctx.stroke();
         }
-        ctx.lineTo(canvas.width, canvas.height / 2);
-        ctx.stroke();
+        draw();
+      } catch (e) {
+        console.warn("Visualizer already connected or failed:", e);
       }
-      draw();
   
-      // 再生実行。iOSではPromiseによるハンドリングが必要
       const playPromise = audio.play();
       if (playPromise !== undefined) {
-        playPromise.then(() => {
-          if (audioCtx.state === 'suspended') {
-            audioCtx.resume();
-          }
-        }).catch(error => {
+        playPromise.catch(error => {
           console.error("Playback failed:", error);
-          // 失敗時は再度resumeを試みて再実行
-          audioCtx.resume().then(() => audio.play());
+          // 失敗した場合は再試行
+          currentAudioContext.resume().then(() => audio.play());
         });
       }
     }
@@ -607,7 +601,8 @@ document.addEventListener("DOMContentLoaded", () => {
     function stopCurrentAudio() {
       if (currentAudio) {
         currentAudio.pause();
-        currentAudio.src = ""; // リソースの解放
+        currentAudio.onended = null;
+        currentAudio.ontimeupdate = null;
         currentAudio = null;
       }
       if (currentAnimationId) {
@@ -716,4 +711,4 @@ document.addEventListener("DOMContentLoaded", () => {
   
     if (recordBtn) recordBtn.onclick = startRecording;
     if (stopBtn) stopBtn.onclick = stopRecording;
-  });
+});
