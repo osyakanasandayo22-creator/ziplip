@@ -1,6 +1,6 @@
 document.addEventListener("DOMContentLoaded", () => {
-  // デバッグ用：スマホで新しい版が読み込まれたか確認するため
-  console.log("Script version: 1.4 - Live Waveform Fix");
+  // デバッグ用
+  console.log("Script version: 1.5 - CSS & Display Timing Fix");
 
   let db;
   let currentThreadId = null;
@@ -274,8 +274,11 @@ document.addEventListener("DOMContentLoaded", () => {
                   await audioContext.resume();
               }
 
-              document.getElementById("recordBox").style.display = "block";
+              // 1. まず表示する（サイズ取得のため）
+              const recordBox = document.getElementById("recordBox");
+              recordBox.style.display = "block";
               
+              // 2. 表示した後にキャンバスサイズを確定させる
               const canvas = document.getElementById("waveCanvas");
               if (canvas) {
                   canvas.width = canvas.offsetWidth || 250;
@@ -290,7 +293,7 @@ document.addEventListener("DOMContentLoaded", () => {
               const bufferLength = analyser.frequencyBinCount;
               dataArray = new Uint8Array(bufferLength);
 
-              drawLiveWave();
+              drawLiveWave(); // 波形描画開始
 
               let mimeType = "audio/webm";
               if (/iPhone|iPad|iPod/i.test(navigator.userAgent)) {
@@ -301,7 +304,7 @@ document.addEventListener("DOMContentLoaded", () => {
               mediaRecorder.ondataavailable = e => audioChunks.push(e.data);
               mediaRecorder.onstop = () => {
                   threadAudioBlob = new Blob(audioChunks, { type: mimeType });
-                  document.getElementById("recordBox").style.display = "none";
+                  recordBox.style.display = "none";
                   titleInputArea.style.display = "block";
                   threadTitleInput.focus();
                   cancelAnimationFrame(animationId);
@@ -362,8 +365,11 @@ document.addEventListener("DOMContentLoaded", () => {
               await audioContext.resume();
           }
 
-          document.getElementById("recordBox").style.display = "block";
+          // 1. 表示
+          const recordBox = document.getElementById("recordBox");
+          recordBox.style.display = "block";
 
+          // 2. サイズ確定
           const canvas = document.getElementById("waveCanvas");
           if (canvas) {
               canvas.width = canvas.offsetWidth || 250;
@@ -392,7 +398,7 @@ document.addEventListener("DOMContentLoaded", () => {
               cancelAnimationFrame(animationId);
               if (audioContext) audioContext.close();
               stream.getTracks().forEach(track => track.stop());
-              document.getElementById("recordBox").style.display = "none";
+              recordBox.style.display = "none";
               saveReplyBlob(blob);
           };
 
@@ -679,7 +685,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
       analyser.getByteTimeDomainData(dataArray);
 
-      // 背景をクリアして描画（黒背景で見やすく）
+      // 背景をクリアして描画
       ctx.fillStyle = "#000";
       ctx.fillRect(0, 0, canvas.width, canvas.height);
 
