@@ -283,20 +283,34 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   
     if (startThreadRecordBtn) {
-      startThreadRecordBtn.onclick = async () => {
-        startThreadRecordBtn.style.display = "none";
-        try {
-          recordingStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-          audioContext = new (window.AudioContext || window.webkitAudioContext)();
-          
-          sourceNode = audioContext.createMediaStreamSource(recordingStream);
-          analyser = audioContext.createAnalyser();
-          analyser.fftSize = 2048;
-          sourceNode.connect(analyser);
-  
-          const bufferLength = analyser.frequencyBinCount;
-          dataArray = new Uint8Array(bufferLength);
-          drawLiveWave();
+// startThreadRecordBtn.onclick の修正版
+startThreadRecordBtn.onclick = async () => {
+  startThreadRecordBtn.style.display = "none";
+  try {
+      recordingStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      audioContext = new (window.AudioContext || window.webkitAudioContext)();
+
+      // 【修正】AudioContextを確実にアクティブにする
+      if (audioContext.state === 'suspended') {
+          await audioContext.resume();
+      }
+
+      // 【修正】キャンバスの内部解像度をセットする
+      const canvas = document.getElementById("waveCanvas");
+      if (canvas) {
+          canvas.width = canvas.offsetWidth || 250; // 表示上の幅をセット
+          canvas.height = 100; // 描画用の高さを固定
+      }
+
+      sourceNode = audioContext.createMediaStreamSource(recordingStream);
+      analyser = audioContext.createAnalyser();
+      analyser.fftSize = 2048;
+      sourceNode.connect(analyser);
+
+      const bufferLength = analyser.frequencyBinCount;
+      dataArray = new Uint8Array(bufferLength);
+
+      drawLiveWave(); // 波形描画開始
   
           let mimeType = "audio/webm";
           if (/iPhone|iPad|iPod/i.test(navigator.userAgent)) {
