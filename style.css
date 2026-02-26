@@ -298,6 +298,7 @@ input[type="range"]::-webkit-slider-thumb {
   border-radius: 8px;
   width: 100%;
   max-width: 250px;
+  height: 100px; /* 【追加】高さを明示的に固定する */
 }
 
 /* アニメーション [6][8] */
