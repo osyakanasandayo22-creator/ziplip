@@ -5,10 +5,8 @@
   <title>ZIPLIP</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <link rel="stylesheet" href="style.css" />
-  <!-- manifest.jsonの読み込み -->
-<link rel="manifest" href="manifest.json">
-<!-- テーマカラーの設定（ソースのアクセントカラーに合わせる） -->
-<meta name="theme-color" content="#111">
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#111">
 </head>
 <body>
 
@@ -34,10 +32,13 @@
 
       <div id="messageList"></div>
 
-      <button id="closeModalBtn">閉じる</button>
-      <button id="deleteThreadBtn">スレッドを削除</button>
+      <div class="modalFooter">
+        <button id="closeModalBtn">閉じる</button>
+        <button id="deleteThreadBtn">スレッドを削除</button>
+      </div>
     </div>
   </div>
+
   <div id="createThreadModal" class="modal">
     <div class="modalContent">
       <h3>スレッドを立てる</h3>
@@ -52,15 +53,18 @@
     </div>
   </div>
 
-  <script src="script.js"></script>
-  <!-- ▼▼ 追加：録音UI ▼▼ -->
-<div id="recordBox" style="display:none; text-align:center; margin-top:20px;">
-    <p>録音中… 残り <span id="countdown">5</span> 秒</p>
-    <canvas id="waveCanvas" width="300" height="60"></canvas>
+  <div id="recordBox" class="record-popup" style="display:none;">
+    <div class="record-popup-content">
+      <p>録音中… 残り <span id="countdown">5</span> 秒</p>
+      <div class="canvas-container">
+        <canvas id="waveCanvas"></canvas>
+      </div>
+    </div>
   </div>
-  <!-- ▲▲ 追加ここまで ▲▲ -->
+
+  <script src="script.js"></script>
+
   <script>
-    // Service Workerの登録
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => {
         navigator.serviceWorker.register('serviceworker.js')
