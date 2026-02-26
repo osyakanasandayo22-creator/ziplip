@@ -308,8 +308,8 @@ input[type="range"]::-webkit-slider-thumb {
 }
 
 @keyframes pulse {
-  from { box-shadow: 0 0 10px rgba(0,255,204,0.2); border-color: rgba(0,255,204,0.5); }
-  to { box-shadow: 0 0 30px rgba(0,255,204,0.4); border-color: rgba(0,255,204,1); }
+  0% { box-shadow: 0 0 10px var(--accent-glow); border-color: #00ccaa; }
+  100% { box-shadow: 0 0 40px var(--accent-glow); border-color: var(--accent-color); }
 }
 
 /* 使用容量表示 [9] */
@@ -318,6 +318,22 @@ input[type="range"]::-webkit-slider-thumb {
   color: var(--text-dim);
   margin-left: auto;
   padding-right: 10px;
+}
+
+#countdown {
+  font-size: 3rem;
+  font-weight: bold;
+  color: var(--accent-color);
+  text-shadow: 0 0 15px var(--accent-glow);
+  display: block;
+  margin-bottom: 10px;
+}
+
+/* 再生中のメッセージアイテムに光を当てる */
+.messageItem.playing {
+  border-left: 3px solid var(--accent-color);
+  background: rgba(0, 255, 204, 0.05);
+  padding-left: 10px;
 }
 
 /* モバイル対応 [8] */
