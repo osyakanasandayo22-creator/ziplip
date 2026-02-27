@@ -30,12 +30,35 @@ document.addEventListener("DOMContentLoaded", () => {
 
   request.onupgradeneeded = e => {
       db = e.target.result;
-      const threadStore = db.createObjectStore("threads", { keyPath: "id" });
-      threadStore.createIndex("title", "title");
-      threadStore.createIndex("lastUpdatedAt", "lastUpdatedAt");
-      const messageStore = db.createObjectStore("messages", { keyPath: "id" });
-      messageStore.createIndex("threadId", "threadId");
-      messageStore.createIndex("createdAt", "createdAt");
+      const tx = e.target.transaction;
+
+      // threads ストアの作成／拡張（既存環境との互換性確保）
+      let threadStore;
+      if (!db.objectStoreNames.contains("threads")) {
+          threadStore = db.createObjectStore("threads", { keyPath: "id" });
+      } else {
+          threadStore = tx.objectStore("threads");
+      }
+      if (!threadStore.indexNames.contains("title")) {
+          threadStore.createIndex("title", "title");
+      }
+      if (!threadStore.indexNames.contains("lastUpdatedAt")) {
+          threadStore.createIndex("lastUpdatedAt", "lastUpdatedAt");
+      }
+
+      // messages ストアの作成／拡張（既存環境との互換性確保）
+      let messageStore;
+      if (!db.objectStoreNames.contains("messages")) {
+          messageStore = db.createObjectStore("messages", { keyPath: "id" });
+      } else {
+          messageStore = tx.objectStore("messages");
+      }
+      if (!messageStore.indexNames.contains("threadId")) {
+          messageStore.createIndex("threadId", "threadId");
+      }
+      if (!messageStore.indexNames.contains("createdAt")) {
+          messageStore.createIndex("createdAt", "createdAt");
+      }
   };
 
   request.onsuccess = e => {
